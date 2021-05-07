@@ -1,10 +1,9 @@
 defmodule Normalizer do
-
-  defguard is_literal(x) when
-    is_integer(x)
-    or is_float(x)
-    or is_binary(x)
-    or is_atom(x)
+  defguard is_literal(x)
+           when is_integer(x) or
+                  is_float(x) or
+                  is_binary(x) or
+                  is_atom(x)
 
   def string_to_quoted(string, opts \\ []) do
     file = Keyword.get(opts, :file, "nofile")
@@ -35,8 +34,12 @@ defmodule Normalizer do
     quoted = maybe_normalize_literal(quoted, line: 1)
 
     Macro.prewalk(quoted, fn
-      {:__aliases__, _, _} = node -> node
-      {:., _, [_, :{}]} = node -> node
+      {:__aliases__, _, _} = node ->
+        node
+
+      {:., _, [_, :{}]} = node ->
+        node
+
       {form, meta, args} = node when is_list(args) ->
         cond do
           meta[:literal?] ->
@@ -54,41 +57,48 @@ defmodule Normalizer do
 
             {form, meta, args}
         end
-      node -> node
+
+      node ->
+        node
     end)
   end
 
   # Strings
   defp maybe_normalize_literal(x, parent_meta) when is_binary(x) do
-    {:__block__, [literal?: true, line: parent_meta[:line], token: Macro.to_string(x), delimiter: ~s["]], [x]}
+    {:__block__,
+     [literal?: true, line: parent_meta[:line], token: Macro.to_string(x), delimiter: ~s["]], [x]}
   end
 
   # Integers, floats, atoms
   defp maybe_normalize_literal(x, parent_meta) when is_literal(x) do
     meta = [literal?: true, line: parent_meta[:line], token: Macro.to_string(x)]
-        meta =
-          if not is_nil(parent_meta[:format]) do
-            Keyword.put(meta, :format, parent_meta[:format])
-          else
-            meta
-          end
-        {:__block__, meta, [x]}
+
+    meta =
+      if not is_nil(parent_meta[:format]) do
+        Keyword.put(meta, :format, parent_meta[:format])
+      else
+        meta
+      end
+
+    {:__block__, meta, [x]}
   end
 
   # 2-tuples
   defp maybe_normalize_literal({left, right}, parent_meta) do
     meta = [literal?: true, line: parent_meta[:line]]
-        left_parent_meta =
-          if is_atom(left) do
-            Keyword.put(parent_meta, :format, :keyword)
-          else
-            meta
-          end
 
-        {:__block__, meta, [
-          {maybe_normalize_literal(left, left_parent_meta),
-           maybe_normalize_literal(right, parent_meta)}
-        ]}
+    left_parent_meta =
+      if is_atom(left) do
+        Keyword.put(parent_meta, :format, :keyword)
+      else
+        meta
+      end
+
+    {:__block__, meta,
+     [
+       {maybe_normalize_literal(left, left_parent_meta),
+        maybe_normalize_literal(right, parent_meta)}
+     ]}
   end
 
   # Lists
@@ -96,21 +106,27 @@ defmodule Normalizer do
     cond do
       keyword?(x) ->
         meta = [literal?: true, line: parent_meta[:line], closing: [line: parent_meta[:line]]]
-        {:__block__, meta, [Enum.map(x, fn
-          {left, right} ->
-            left_parent_meta =
-              if is_atom(left) and not Keyword.has_key?(parent_meta, :do) do
-                Keyword.put(parent_meta, :format, :keyword)
-              else
-                meta
-              end
 
-          {maybe_normalize_literal(left, left_parent_meta),
-          maybe_normalize_literal(right, parent_meta)}
-        end)]}
+        {:__block__, meta,
+         [
+           Enum.map(x, fn
+             {left, right} ->
+               left_parent_meta =
+                 if is_atom(left) and not Keyword.has_key?(parent_meta, :do) do
+                   Keyword.put(parent_meta, :format, :keyword)
+                 else
+                   meta
+                 end
+
+               {maybe_normalize_literal(left, left_parent_meta),
+                maybe_normalize_literal(right, parent_meta)}
+           end)
+         ]}
 
       true ->
-        {:__block__, [literal?: true, line: parent_meta[:line], closing: [line: parent_meta[:line]]], [Enum.map(x, &maybe_normalize_literal(&1, parent_meta))]}
+        {:__block__,
+         [literal?: true, line: parent_meta[:line], closing: [line: parent_meta[:line]]],
+         [Enum.map(x, &maybe_normalize_literal(&1, parent_meta))]}
     end
   end
 

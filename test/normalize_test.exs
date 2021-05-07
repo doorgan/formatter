@@ -47,10 +47,13 @@ defmodule NormalizeTest do
     test "two elements tuples" do
       normalized = Normalizer.normalize({:foo, :bar})
 
-      assert {:__block__, meta, [{
-        {:__block__, left_meta, [:foo]},
-        {:__block__, right_meta, [:bar]}
-      }]} = normalized
+      assert {:__block__, meta,
+              [
+                {
+                  {:__block__, left_meta, [:foo]},
+                  {:__block__, right_meta, [:bar]}
+                }
+              ]} = normalized
 
       assert Keyword.has_key?(meta, :line)
       assert Keyword.has_key?(left_meta, :line)
@@ -62,13 +65,14 @@ defmodule NormalizeTest do
     test "regular lists" do
       normalized = Normalizer.normalize([1, 2, 3])
 
-      assert {:__block__, meta, [
-        [
-          {:__block__, first_meta, [1]},
-          {:__block__, second_meta, [2]},
-          {:__block__, third_meta, [3]},
-        ]
-      ]} = normalized
+      assert {:__block__, meta,
+              [
+                [
+                  {:__block__, first_meta, [1]},
+                  {:__block__, second_meta, [2]},
+                  {:__block__, third_meta, [3]}
+                ]
+              ]} = normalized
 
       metas = [meta, first_meta, second_meta, third_meta]
 
@@ -85,12 +89,13 @@ defmodule NormalizeTest do
       quoted = Code.string_to_quoted!("[a: :b, c: :d]")
       normalized = Normalizer.normalize(quoted)
 
-      assert {:__block__, meta, [[
-        {{:__block__, first_key_meta, [:a]},
-         {:__block__, _, [:b]}},
-        {{:__block__, second_key_meta, [:c]},
-         {:__block__, _, [:d]}},
-      ]]} = normalized
+      assert {:__block__, meta,
+              [
+                [
+                  {{:__block__, first_key_meta, [:a]}, {:__block__, _, [:b]}},
+                  {{:__block__, second_key_meta, [:c]}, {:__block__, _, [:d]}}
+                ]
+              ]} = normalized
 
       assert Keyword.has_key?(meta, :line)
       assert get_in(meta, [:closing, :line]) |> is_integer()
@@ -100,7 +105,7 @@ defmodule NormalizeTest do
 
     test "mixed keyword list" do
       sample = ~s([1, 2, a: :b])
-      quoted = Code.string_to_quoted!(sample) |> IO.inspect
+      quoted = Code.string_to_quoted!(sample) |> IO.inspect()
       normalized = Normalizer.normalize(quoted)
 
       {:ok, doc} = Formatter.quoted_to_algebra(normalized)
@@ -111,12 +116,13 @@ defmodule NormalizeTest do
     end
 
     test "do blocks" do
-      sample = """
-      def foo(bar) do
-        :ok
-      end
-      """
-      |> String.trim()
+      sample =
+        """
+        def foo(bar) do
+          :ok
+        end
+        """
+        |> String.trim()
 
       quoted = Code.string_to_quoted!(sample, @parser_opts)
       normalized = Normalizer.normalize(quoted)
@@ -129,12 +135,14 @@ defmodule NormalizeTest do
     end
 
     test "mixed keyword lists" do
-      sample = """
-      def foo(bar) do
-        [1, foo: :bar]
-        :ok
-      end
-      """ |> String.trim()
+      sample =
+        """
+        def foo(bar) do
+          [1, foo: :bar]
+          :ok
+        end
+        """
+        |> String.trim()
 
       quoted = Code.string_to_quoted!(sample, @parser_opts)
 
