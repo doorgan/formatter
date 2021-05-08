@@ -213,7 +213,7 @@ defmodule Normalizer do
     x
   end
 
-  defp normalize_list_elements(elems, parent_meta, keyword? \\ nil)
+  defp normalize_list_elements(elems, parent_meta, keyword? \\ false)
 
   defp normalize_list_elements([[{_, _, [{_, _}]}] = first | rest], parent_meta, keyword?) do
     # Skip already normalized 2-tuples
@@ -222,7 +222,7 @@ defmodule Normalizer do
 
   defp normalize_list_elements([{left, right} | rest], parent_meta, keyword?) do
     keyword? =
-      if is_nil(keyword?) or not keyword? do
+      if not keyword? do
         Enum.empty?(rest) or keyword?(rest)
       else
         keyword?
