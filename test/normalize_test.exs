@@ -11,6 +11,41 @@ defmodule NormalizeTest do
     |> IO.iodata_to_binary()
   end
 
+  defp format_string(string) do
+    string
+    |> Code.format_string!()
+    |> IO.iodata_to_binary()
+  end
+
+  defmacro assert_same(good, opts \\ []) do
+    quote bind_quoted: [good: good, opts: opts] do
+      good = format_string(good)
+
+      quoted =
+        Code.string_to_quoted!(
+          good,
+          @parser_opts ++
+            [
+              literal_encoder: &{:ok, {:__block__, &2, [&1]}}
+            ]
+        )
+
+      normalized = Normalizer.normalize(quoted)
+
+      if opts[:inspect] do
+        expected = Normalizer.string_to_quoted(good)
+        IO.inspect(expected, label: :expected)
+        IO.inspect(normalized, label: :actual)
+      end
+
+      {:ok, doc} = Formatter.quoted_to_algebra(normalized)
+
+      output = doc_to_binary(doc)
+
+      assert good == output
+    end
+  end
+
   describe "normalizes" do
     test "integers" do
       normalized = Normalizer.normalize(10)
@@ -33,7 +68,6 @@ defmodule NormalizeTest do
 
       assert {:__block__, meta, [:hello]} = normalized
       assert Keyword.has_key?(meta, :line)
-      assert meta[:token] == ":hello"
     end
 
     test "strings" do
@@ -58,8 +92,6 @@ defmodule NormalizeTest do
       assert Keyword.has_key?(meta, :line)
       assert Keyword.has_key?(left_meta, :line)
       assert Keyword.has_key?(right_meta, :line)
-      assert left_meta[:token] == ":foo"
-      assert right_meta[:token] == ":bar"
     end
 
     test "regular lists" do
@@ -84,8 +116,8 @@ defmodule NormalizeTest do
     end
   end
 
-  describe "normalizes compositions" do
-    test "keyword list" do
+  describe "normalizes compositions of" do
+    test "keyword lists" do
       quoted = Code.string_to_quoted!("[a: :b, c: :d]")
       normalized = Normalizer.normalize(quoted)
 
@@ -103,56 +135,142 @@ defmodule NormalizeTest do
       assert second_key_meta[:format] == :keyword
     end
 
-    test "mixed keyword list" do
-      sample = ~s([1, 2, a: :b])
-      quoted = Code.string_to_quoted!(sample) |> IO.inspect()
-      normalized = Normalizer.normalize(quoted)
+    test "mixed keyword lists" do
+      sample = "[1, 2, a: :b, c: :d]"
 
-      {:ok, doc} = Formatter.quoted_to_algebra(normalized)
-
-      output = doc_to_binary(doc)
-
-      assert sample == output
+      assert_same(sample)
     end
 
     test "do blocks" do
-      sample =
-        """
-        def foo(bar) do
-          :ok
-        end
-        """
-        |> String.trim()
+      sample = """
+      def foo(bar) do
+        :ok
+      end
+      """
 
-      quoted = Code.string_to_quoted!(sample, @parser_opts)
-      normalized = Normalizer.normalize(quoted)
-
-      {:ok, doc} = Formatter.quoted_to_algebra(normalized)
-
-      output = doc_to_binary(doc)
-
-      assert sample == output
+      assert_same(sample)
     end
 
-    test "mixed keyword lists" do
-      sample =
-        """
-        def foo(bar) do
-          [1, foo: :bar]
-          :ok
-        end
-        """
-        |> String.trim()
+    test "conds and cases" do
+      sample = """
+      case something do
+        foo -> bar
+        baz -> qux
+      end
+      cond do
+        foo? -> :bar
+        true -> :ok
+      end
+      """
 
-      quoted = Code.string_to_quoted!(sample, @parser_opts)
-
-      normalized = Normalizer.normalize(quoted)
-
-      {:ok, doc} = Formatter.quoted_to_algebra(normalized)
-
-      output = doc_to_binary(doc)
-
-      assert sample == output
+      assert_same(sample)
     end
+
+    test "anonymous functions" do
+      sample = """
+      fn
+        foo -> :bar
+        baz -> 42
+      end
+      """
+
+      assert_same(sample)
+    end
+
+    test "anonymous functions with multiple arguments" do
+      sample = """
+      fn
+        foo, bar -> :bar
+        baz, qux, :foo -> 42
+      end
+      """
+
+      assert_same(sample)
+    end
+
+    test "functions with guards" do
+      sample = """
+      def foo(bar, baz) when not is_nil(baz) do
+        :test
+      end
+      """
+
+      assert_same(sample)
+    end
+
+    test "functions with optional argument" do
+      sample = """
+      def foo(bar, opts \\\\ []) do
+        :test
+      end
+      """
+
+      assert_same(sample)
+    end
+
+    test "function with no arguments" do
+      sample = """
+      defmodule Foo do
+        :foo
+        :bar
+      end
+      """
+
+      assert_same(sample)
+    end
+
+    test "guard definitions" do
+      sample = """
+      defguard is_number(x) when is_integer(x) or is_float(x)
+      """
+
+      assert_same(sample)
+    end
+
+    test "function with const pattern matching arg" do
+      sample = """
+      def foo([arg | args]) do
+        :foo
+        :test
+      end
+      """
+
+      assert_same(sample)
+    end
+  end
+
+  test "calls to erlang modules" do
+    sample = """
+    :erlang.iolist_to_binary(iolist)
+    """
+
+    assert_same(sample)
+  end
+
+  test "access syntax" do
+    sample = """
+    foo[:bar]
+    foo[bar]
+    foo.bar[baz]
+    """
+
+    assert_same(sample)
+  end
+
+  test "maps" do
+    sample = """
+    %{foo: bar}
+    """
+
+    assert_same(sample)
+  end
+
+  test "map update syntax" do
+    sample = """
+    %{base | foo: bar}
+    %{base | nested: %{foo: bar}}
+    """
+
+    assert_same(sample)
   end
 end
