@@ -201,45 +201,53 @@ defmodule Normalizer do
 
   # Lists
   defp normalize(x, parent_meta) when is_list(x) do
-    cond do
-      keyword?(x) ->
-        # If it's a keyword list, we need to add `format: :keyword` to the left
-        # hand side metadata, otherwise the keyword list would be printed in its
-        # desugared form [{:foo, :bar}]
-        meta = [
-          line: parent_meta[:line],
-          closing: [line: parent_meta[:line]]
-        ]
+    meta = [line: parent_meta[:line], closing: [line: parent_meta[:line]]]
 
-        args =
-          Enum.map(x, fn {left, right} ->
-            left_parent_meta = Keyword.put(parent_meta, :format, :keyword)
+    args = normalize_list_elements(x, parent_meta)
 
-            {normalize(left, left_parent_meta), normalize(right, parent_meta)}
-          end)
-
-        {:__block__, meta, [args]}
-
-      true ->
-        meta = [line: parent_meta[:line], closing: [line: parent_meta[:line]]]
-
-        args =
-          Enum.map(x, fn
-            {_, _} = pair ->
-              {_, _, [pair]} = normalize(pair, parent_meta)
-              pair
-
-            element ->
-              normalize(element, parent_meta)
-          end)
-
-        {:__block__, meta, [args]}
-    end
+    {:__block__, meta, [args]}
   end
 
   # Everything else
   defp normalize(x, _parent_meta) do
     x
+  end
+
+  defp normalize_list_elements(elems, parent_meta, keyword? \\ nil)
+
+  defp normalize_list_elements([[{_, _, [{_, _}]}] = first | rest], parent_meta, keyword?) do
+    # Skip already normalized 2-tuples
+    [first | normalize_list_elements(rest, parent_meta, keyword?)]
+  end
+
+  defp normalize_list_elements([{left, right} | rest], parent_meta, keyword?) do
+    keyword? =
+      if is_nil(keyword?) or not keyword? do
+        Enum.empty?(rest) or keyword?(rest)
+      else
+        keyword?
+      end
+
+    pair =
+      if keyword? do
+        {_, _, [{left, right}]} = normalize({left, right})
+        left = Macro.update_meta(left, &Keyword.put(&1, :format, :keyword))
+        {left, right}
+      else
+        left = normalize(left)
+        right = normalize(right)
+        {:__block__, [line: parent_meta[:line]], [{left, right}]}
+      end
+
+    [pair | normalize_list_elements(rest, parent_meta, keyword?)]
+  end
+
+  defp normalize_list_elements([first | rest], parent_meta, keyword?) do
+    [normalize(first, parent_meta) | normalize_list_elements(rest, parent_meta, keyword?)]
+  end
+
+  defp normalize_list_elements([], _parent_meta, _keyword?) do
+    []
   end
 
   defp keyword?([{_, _} | list]), do: keyword?(list)

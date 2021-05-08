@@ -136,9 +136,8 @@ defmodule NormalizeTest do
     end
 
     test "mixed keyword lists" do
-      sample = "[1, 2, a: :b, c: :d]"
-
-      assert_same(sample)
+      assert_same("[1, 2, a: :b, c: :d]")
+      assert_same("[1, {:foo, :bar}, 5, c: :d]")
     end
 
     test "do blocks" do
