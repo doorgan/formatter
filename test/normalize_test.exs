@@ -17,11 +17,13 @@ defmodule NormalizeTest do
     |> IO.iodata_to_binary()
   end
 
-  defmacro assert_same(good, opts \\ []) do
-    quote bind_quoted: [good: good, opts: opts] do
+  defmacro assert_same(good) do
+    quote bind_quoted: [good: good] do
       good = format_string(good)
 
-      quoted =
+      quoted = Code.string_to_quoted!(good, @parser_opts)
+
+      quoted_wrapped =
         Code.string_to_quoted!(
           good,
           @parser_opts ++
@@ -31,18 +33,16 @@ defmodule NormalizeTest do
         )
 
       normalized = Normalizer.normalize(quoted)
-
-      if opts[:inspect] do
-        expected = Normalizer.string_to_quoted(good)
-        IO.inspect(expected, label: :expected)
-        IO.inspect(normalized, label: :actual)
-      end
+      normalized_wrapped = Normalizer.normalize(quoted_wrapped)
 
       {:ok, doc} = Formatter.quoted_to_algebra(normalized)
+      {:ok, doc_wrapped} = Formatter.quoted_to_algebra(normalized_wrapped)
 
       output = doc_to_binary(doc)
+      output_wrapped = doc_to_binary(doc_wrapped)
 
       assert good == output
+      assert good == output_wrapped
     end
   end
 
