@@ -295,21 +295,21 @@ defmodule NormalizeTest do
   end
 
   test "when with keywords inside call" do
-    assert_same """
+    assert_same("""
     quote((bar(foo(1)) when bat: foo(1)), [])
-    """
+    """)
 
-    assert_same """
+    assert_same("""
     quote(do: (bar(foo(1)) when bat: foo(1)), line: 1)
-    """
+    """)
 
-    assert_same """
+    assert_same("""
     typespec(quote(do: (bar(foo(1)) when bat: foo(1))), [foo: 1], [])
-    """
+    """)
   end
 
   test "type with multiple |" do
-    assert_same """
+    assert_same("""
     @type t ::
             binary
             | :doc_nil
@@ -322,16 +322,16 @@ defmodule NormalizeTest do
             | doc_color
             | doc_force
             | doc_cancel
-    """
+    """)
   end
 
   test "spec with when keywords and |" do
-    assert_same """
+    assert_same("""
     @spec send(dest, msg, [option]) :: :ok | :noconnect | :nosuspend
           when dest: pid | port | atom | {atom, node}, msg: any, option: :noconnect | :nosuspend
-    """
+    """)
 
-    assert_same """
+    assert_same("""
     @spec send(dest, msg, [option]) :: :ok | :noconnect | :nosuspend
           when dest:
                  pid
@@ -340,27 +340,27 @@ defmodule NormalizeTest do
                  | {atom, node}
                  | and_a_really_long_type_to_force_a_line_break
                  | followed_by_another_really_long_type
-    """
+    """)
 
-    assert_same """
+    assert_same("""
     @callback get_and_update(data, key, (value -> {get_value, value} | :pop)) :: {get_value, data}
               when get_value: var, data: container
-    """
+    """)
   end
 
   test "spec with multiple keys on type" do
-    assert_same """
+    assert_same("""
     @spec foo(%{(String.t() | atom) => any}) :: any
-    """
+    """)
   end
 
   test "multiple whens with new lines" do
-    assert_same """
+    assert_same("""
     def sleep(timeout)
         when is_integer(timeout) and timeout >= 0
         when timeout == :infinity do
       receive after: (timeout -> :ok)
     end
-    """
+    """)
   end
 end

@@ -112,12 +112,15 @@ defmodule Normalizer do
   # If a keyword list is an argument of a guard, we need to drop the block
   # wrapping
   defp normalize({:when, meta, args} = _quoted, _parent_meta) do
-    args = Enum.map(args, fn
-      arg when is_list(arg) ->
-        {_, _, [arg]} = normalize(arg, meta)
-        arg
-      arg -> normalize(arg, meta)
-    end)
+    args =
+      Enum.map(args, fn
+        arg when is_list(arg) ->
+          {_, _, [arg]} = normalize(arg, meta)
+          arg
+
+        arg ->
+          normalize(arg, meta)
+      end)
 
     {:when, meta, args}
   end
