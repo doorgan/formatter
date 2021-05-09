@@ -11,12 +11,6 @@ defmodule NormalizeTest do
     |> IO.iodata_to_binary()
   end
 
-  defp format_string(string, opts \\ []) do
-    string
-    |> Code.format_string!(opts)
-    |> IO.iodata_to_binary()
-  end
-
   defmacro assert_same(good, opts \\ []) do
     quote bind_quoted: [good: good, opts: opts] do
       good = format_string(good, opts)
@@ -44,6 +38,12 @@ defmodule NormalizeTest do
       assert good == output
       assert good == output_wrapped
     end
+  end
+
+  defp format_string(string, opts) do
+    string
+    |> Code.format_string!(opts)
+    |> IO.iodata_to_binary()
   end
 
   describe "normalizes" do
