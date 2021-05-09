@@ -7,19 +7,19 @@ defmodule NormalizeTest do
 
   defp doc_to_binary(doc) do
     doc
-    |> Inspect.Algebra.format(80)
+    |> Inspect.Algebra.format(98)
     |> IO.iodata_to_binary()
   end
 
-  defp format_string(string) do
+  defp format_string(string, opts \\ []) do
     string
-    |> Code.format_string!()
+    |> Code.format_string!(opts)
     |> IO.iodata_to_binary()
   end
 
-  defmacro assert_same(good) do
-    quote bind_quoted: [good: good] do
-      good = format_string(good)
+  defmacro assert_same(good, opts \\ []) do
+    quote bind_quoted: [good: good, opts: opts] do
+      good = format_string(good, opts)
 
       quoted = Code.string_to_quoted!(good, @parser_opts)
 
@@ -166,14 +166,15 @@ defmodule NormalizeTest do
     end
 
     test "anonymous functions" do
-      sample = """
+      assert_same("""
       fn
         foo -> :bar
         baz -> 42
       end
-      """
+      """)
 
-      assert_same(sample)
+      assert_same("(() -> :ok)")
+      assert_same("(() when node() == :nonode@nohost -> true)")
     end
 
     test "anonymous functions with multiple arguments" do
@@ -271,5 +272,95 @@ defmodule NormalizeTest do
     """
 
     assert_same(sample)
+  end
+
+  test "heredocs" do
+    assert_same("""
+    (
+      arg1 ->
+        'foo'
+      arg2 ->
+        'bar'
+    )
+    """)
+  end
+
+  test "multiple empty clauses" do
+    assert_same("""
+    (
+      () -> :ok1
+      () -> :ok2
+    )
+    """)
+  end
+
+  test "when with keywords inside call" do
+    assert_same """
+    quote((bar(foo(1)) when bat: foo(1)), [])
+    """
+
+    assert_same """
+    quote(do: (bar(foo(1)) when bat: foo(1)), line: 1)
+    """
+
+    assert_same """
+    typespec(quote(do: (bar(foo(1)) when bat: foo(1))), [foo: 1], [])
+    """
+  end
+
+  test "type with multiple |" do
+    assert_same """
+    @type t ::
+            binary
+            | :doc_nil
+            | :doc_line
+            | doc_string
+            | doc_cons
+            | doc_nest
+            | doc_break
+            | doc_group
+            | doc_color
+            | doc_force
+            | doc_cancel
+    """
+  end
+
+  test "spec with when keywords and |" do
+    assert_same """
+    @spec send(dest, msg, [option]) :: :ok | :noconnect | :nosuspend
+          when dest: pid | port | atom | {atom, node}, msg: any, option: :noconnect | :nosuspend
+    """
+
+    assert_same """
+    @spec send(dest, msg, [option]) :: :ok | :noconnect | :nosuspend
+          when dest:
+                 pid
+                 | port
+                 | atom
+                 | {atom, node}
+                 | and_a_really_long_type_to_force_a_line_break
+                 | followed_by_another_really_long_type
+    """
+
+    assert_same """
+    @callback get_and_update(data, key, (value -> {get_value, value} | :pop)) :: {get_value, data}
+              when get_value: var, data: container
+    """
+  end
+
+  test "spec with multiple keys on type" do
+    assert_same """
+    @spec foo(%{(String.t() | atom) => any}) :: any
+    """
+  end
+
+  test "multiple whens with new lines" do
+    assert_same """
+    def sleep(timeout)
+        when is_integer(timeout) and timeout >= 0
+        when timeout == :infinity do
+      receive after: (timeout -> :ok)
+    end
+    """
   end
 end

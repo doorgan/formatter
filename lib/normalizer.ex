@@ -77,6 +77,10 @@ defmodule Normalizer do
     {:., meta, [normalize(left, meta), right]}
   end
 
+  defp normalize([{:->, _, _} | _] = quoted, parent_meta) do
+    Enum.map(quoted, &normalize(&1, parent_meta))
+  end
+
   # left -> right
   defp normalize({:->, meta, [left, right]}, _parent_meta) do
     left = Enum.map(left, &normalize(&1, meta))
@@ -103,6 +107,19 @@ defmodule Normalizer do
       end
 
     {:%{}, meta, args}
+  end
+
+  # If a keyword list is an argument of a guard, we need to drop the block
+  # wrapping
+  defp normalize({:when, meta, args} = _quoted, _parent_meta) do
+    args = Enum.map(args, fn
+      arg when is_list(arg) ->
+        {_, _, [arg]} = normalize(arg, meta)
+        arg
+      arg -> normalize(arg, meta)
+    end)
+
+    {:when, meta, args}
   end
 
   # Calls
@@ -200,17 +217,22 @@ defmodule Normalizer do
   end
 
   # Lists
-  defp normalize(x, parent_meta) when is_list(x) do
-    meta = [line: parent_meta[:line], closing: [line: parent_meta[:line]]]
+  defp normalize(list, parent_meta) when is_list(list) do
+    if !Enum.empty?(list) and List.ascii_printable?(list) do
+      # It's a charlist
+      {:__block__, [line: parent_meta[:line], delimiter: "'"], [list]}
+    else
+      meta = [line: parent_meta[:line], closing: [line: parent_meta[:line]]]
 
-    args = normalize_list_elements(x, parent_meta)
+      args = normalize_list_elements(list, parent_meta)
 
-    {:__block__, meta, [args]}
+      {:__block__, meta, [args]}
+    end
   end
 
   # Everything else
-  defp normalize(x, _parent_meta) do
-    x
+  defp normalize(quoted, _parent_meta) do
+    quoted
   end
 
   defp normalize_list_elements(elems, parent_meta, keyword? \\ false)
