@@ -5,6 +5,9 @@ defmodule NormalizeTest do
     token_metadata: true
   ]
 
+  @short_length [line_length: 10]
+  @medium_length [line_length: 20]
+
   defp doc_to_binary(doc) do
     doc
     |> Inspect.Algebra.format(98)
@@ -362,5 +365,42 @@ defmodule NormalizeTest do
       receive after: (timeout -> :ok)
     end
     """)
+  end
+
+  test "for functions" do
+    assert_same """
+    foo(fn x -> y end)
+    """
+
+    assert_same """
+    foo(fn
+      a1 -> :ok
+      b2 -> :error
+    end)
+    """
+
+    assert_same """
+    foo(bar, fn
+      a1 -> :ok
+      b2 -> :error
+    end)
+    """
+
+    assert_same """
+                foo(fn x ->
+                  :really_long_atom
+                end)
+                """,
+                @medium_length
+
+    assert_same """
+                foo(bar, fn
+                  a1 ->
+                    :ok
+                  b2 ->
+                    :really_long_error
+                end)
+                """,
+                @medium_length
   end
 end
