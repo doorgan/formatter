@@ -306,7 +306,7 @@ defmodule NormalizeTest do
         :in_else
       catch
         :in_catch
-        rescue
+      rescue
         :in_rescue
       after
         :in_after
