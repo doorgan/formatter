@@ -41,56 +41,63 @@ defmodule Normalizer do
   Wraps literals in the quoted expression to conform to the AST format expected
   by the formatter.
   """
-  def normalize(quoted) do
-    normalize(quoted, line: 1)
+  def normalize(quoted, opts \\ []) do
+    line = Keyword.get(opts, :line, 1)
+
+    do_normalize(quoted, line: line)
   end
 
-  defp normalize({:__block__, _, [literal]} = quoted, _parent_meta) when is_literal(literal) do
+  # Skip already wrapped blocks
+  defp do_normalize({:__block__, _, [literal]} = quoted, _parent_meta) when is_literal(literal) do
     quoted
   end
 
-  defp normalize({:__block__, meta, args} = quoted, _parent_meta) do
+  defp do_normalize({:__block__, meta, args} = quoted, _parent_meta) do
     if Keyword.has_key?(meta, :format) do
       quoted
     else
-      {:__block__, meta, Enum.map(args, &normalize(&1, meta))}
+      {:__block__, meta, Enum.map(args, &do_normalize(&1, meta))}
     end
   end
 
   # Skip aliases so the module segment atoms don't get wrapped
-  defp normalize({:__aliases__, _, _} = quoted, _parent_meta) do
+  defp do_normalize({:__aliases__, _, _} = quoted, _parent_meta) do
     quoted
   end
 
   # Skip qualified tuples left hand side
-  defp normalize({:., _, [_, :{}]} = quoted, _parent_meta) do
+  defp do_normalize({:., _, [_, :{}]} = quoted, _parent_meta) do
     quoted
   end
 
-  # foo[:bar]
-  defp normalize({:., _, [Access, :get]} = quoted, _parent_meta) do
+  # Don't normalize the `Access` atom in access syntax
+  defp do_normalize({:., _, [Access, :get]} = quoted, _parent_meta) do
     quoted
   end
 
   # Only normalize the left side of the dot operator
-  defp normalize({:., meta, [left, right]}, _parent_meta) do
-    {:., meta, [normalize(left, meta), right]}
+  # The right hand side is an atom in the AST but it's not an atom literal, so
+  # it should not be wrapped
+  defp do_normalize({:., meta, [left, right]}, _parent_meta) do
+    {:., meta, [do_normalize(left, meta), right]}
   end
 
-  defp normalize([{:->, _, _} | _] = quoted, parent_meta) do
-    Enum.map(quoted, &normalize(&1, parent_meta))
+  # A list of left to right arrows is not considered as a list literal, so it's
+  # not wrapped
+  defp do_normalize([{:->, _, _} | _] = quoted, parent_meta) do
+    Enum.map(quoted, &do_normalize(&1, parent_meta))
   end
 
   # left -> right
-  defp normalize({:->, meta, [left, right]}, _parent_meta) do
-    left = Enum.map(left, &normalize(&1, meta))
-    right = normalize(right, meta)
+  defp do_normalize({:->, meta, [left, right]}, _parent_meta) do
+    left = Enum.map(left, &do_normalize(&1, meta))
+    right = do_normalize(right, meta)
     {:->, meta, [left, right]}
   end
 
   # Maps
-  defp normalize({:%{}, meta, args}, _parent_meta) do
-    args = Enum.map(args, &normalize(&1, meta))
+  defp do_normalize({:%{}, meta, args}, _parent_meta) do
+    args = Enum.map(args, &do_normalize(&1, meta))
 
     args =
       case args do
@@ -111,28 +118,28 @@ defmodule Normalizer do
 
   # If a keyword list is an argument of a guard, we need to drop the block
   # wrapping
-  defp normalize({:when, meta, args} = _quoted, _parent_meta) do
+  defp do_normalize({:when, meta, args} = _quoted, _parent_meta) do
     args =
       Enum.map(args, fn
         arg when is_list(arg) ->
-          {_, _, [arg]} = normalize(arg, meta)
+          {_, _, [arg]} = do_normalize(arg, meta)
           arg
 
         arg ->
-          normalize(arg, meta)
+          do_normalize(arg, meta)
       end)
 
     {:when, meta, args}
   end
 
   # Calls
-  defp normalize({form, meta, args}, _parent_meta) when is_list(args) do
+  defp do_normalize({form, meta, args}, _parent_meta) when is_list(args) do
     # Only normalize the form if it's a qualified call
     form =
       if is_atom(form) do
         form
       else
-        normalize(form, meta)
+        do_normalize(form, meta)
       end
 
     cond do
@@ -141,7 +148,7 @@ defmodule Normalizer do
 
         last_arg =
           Enum.map(last_arg, fn {tag, block} ->
-            block = normalize(block, meta)
+            block = do_normalize(block, meta)
 
             block =
               case block do
@@ -159,30 +166,19 @@ defmodule Normalizer do
             {tag, block}
           end)
 
-        # {_, _, last_arg} = normalize(last_arg, meta)
-        {_, _, [leading_args]} = normalize(leading_args, meta)
+        {_, _, [leading_args]} = do_normalize(leading_args, meta)
 
         {form, meta, leading_args ++ [last_arg]}
 
       true ->
-        args = Enum.map(args, &normalize(&1, meta))
+        args = Enum.map(args, &do_normalize(&1, meta))
 
         {form, meta, args}
     end
   end
 
-  # Strings
-  defp normalize(x, parent_meta) when is_binary(x) do
-    meta = [
-      line: parent_meta[:line],
-      token: Macro.to_string(x)
-    ]
-
-    {:__block__, meta, [x]}
-  end
-
   # Integers, floats, atoms
-  defp normalize(x, parent_meta) when is_literal(x) do
+  defp do_normalize(x, parent_meta) when is_literal(x) do
     meta = [line: parent_meta[:line]]
 
     meta =
@@ -203,7 +199,7 @@ defmodule Normalizer do
   end
 
   # 2-tuples
-  defp normalize({left, right}, parent_meta) do
+  defp do_normalize({left, right}, parent_meta) do
     meta = [line: parent_meta[:line]]
 
     left_parent_meta =
@@ -215,12 +211,12 @@ defmodule Normalizer do
 
     {:__block__, meta,
      [
-       {normalize(left, left_parent_meta), normalize(right, parent_meta)}
+       {do_normalize(left, left_parent_meta), do_normalize(right, parent_meta)}
      ]}
   end
 
   # Lists
-  defp normalize(list, parent_meta) when is_list(list) do
+  defp do_normalize(list, parent_meta) when is_list(list) do
     if !Enum.empty?(list) and List.ascii_printable?(list) do
       # It's a charlist
       {:__block__, [line: parent_meta[:line], delimiter: "'"], [list]}
@@ -234,7 +230,7 @@ defmodule Normalizer do
   end
 
   # Everything else
-  defp normalize(quoted, _parent_meta) do
+  defp do_normalize(quoted, _parent_meta) do
     quoted
   end
 
@@ -255,12 +251,12 @@ defmodule Normalizer do
 
     pair =
       if keyword? do
-        {_, _, [{left, right}]} = normalize({left, right})
+        {_, _, [{left, right}]} = do_normalize({left, right}, parent_meta)
         left = Macro.update_meta(left, &Keyword.put(&1, :format, :keyword))
         {left, right}
       else
-        left = normalize(left)
-        right = normalize(right)
+        left = do_normalize(left, parent_meta)
+        right = do_normalize(right, parent_meta)
         {:__block__, [line: parent_meta[:line]], [{left, right}]}
       end
 
@@ -268,7 +264,7 @@ defmodule Normalizer do
   end
 
   defp normalize_list_elements([first | rest], parent_meta, keyword?) do
-    [normalize(first, parent_meta) | normalize_list_elements(rest, parent_meta, keyword?)]
+    [do_normalize(first, parent_meta) | normalize_list_elements(rest, parent_meta, keyword?)]
   end
 
   defp normalize_list_elements([], _parent_meta, _keyword?) do
