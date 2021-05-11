@@ -117,6 +117,8 @@ defmodule NormalizeTest do
 
     assert Enum.all?(metas, &Keyword.has_key?(&1, :line))
 
+    assert [line: _] = meta[:closing]
+
     assert first_meta[:token] == "1"
     assert second_meta[:token] == "2"
     assert third_meta[:token] == "3"
