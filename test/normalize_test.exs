@@ -151,15 +151,20 @@ defmodule NormalizeTest do
                 {:__block__, _,
                  [
                    {
-                     {:__block__, _, [:a]},
+                     {:__block__, a_meta, [:a]},
                      {:__block__, _, [:b]}
                    }
                  ]},
                 {:__block__, _, [2]},
-                {{:__block__, _, [:c]}, {:__block__, _, [:d]}},
-                {{:__block__, _, [:e]}, {:__block__, _, [:f]}}
+                {{:__block__, c_meta, [:c]}, {:__block__, _, [:d]}},
+                {{:__block__, e_meta, [:e]}, {:__block__, _, [:f]}}
               ]
             ]} = normalized
+
+    refute a_meta[:format] == :keyword
+
+    assert c_meta[:format] == :keyword
+    assert e_meta[:format] == :keyword
   end
 
   test "keyword list in guard with ommited square brackets" do
