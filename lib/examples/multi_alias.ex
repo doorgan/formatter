@@ -30,8 +30,7 @@ defmodule Examples.MultiAlias do
   ```
   """
   def fix(source) do
-    quoted = Code.string_to_quoted!(source, token_metadata: true)
-    comments = Comments.get_comments(source)
+    {quoted, comments} = Formatter.string_to_quoted_with_comments(source)
 
     quoted = Comments.merge_comments(quoted, comments)
 
@@ -77,7 +76,7 @@ defmodule Examples.MultiAlias do
 
         meta =
           if index == 0 do
-            Keyword.update!(meta, :leading_comments, &(alias_meta[:leading_comments] ++ &1))
+            Keyword.update!(meta, :leading_comments, &(&1 ++ alias_meta[:leading_comments]))
           else
             meta
           end
