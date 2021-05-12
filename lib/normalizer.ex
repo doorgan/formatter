@@ -1,34 +1,34 @@
 defmodule Normalizer do
+  @doc """
+  This module implements the normalization step required for the internal
+  version of the AST used by the Elixir formatter to be exposed as public API.
+
+  The formatter is capable of walking a quoted expression and turn it into an
+  algebra documment for formatting, but that functionality is currently private
+  API. This means that there is no way to turn a quoted expression into a
+  formatted string of source code (`Macro.to_string` comes close, but produces
+  badly formatted source code).
+
+  In addition to using the `token_metadata: true` option to get additional
+  information in the ast, the formatter also wraps the literals in `:__block__`s
+  in order to keep the metadata like line numbers in the literals. As noted in
+  [this proposal](https://groups.google.com/u/1/g/elixir-lang-core/c/-8CPorfVTxg),
+  if a function such as `quoted_to_algebra` is to be exposed, it's not enough to
+  make such wrappings a public data structure, but converting any quoted
+  expression provided by the user into a quoted expression that uses that same
+  wrapping is needed.
+
+  It is important to note that in a regular quoted expression it's not possible
+  to know exactly at which line a literal is, so this normalization makes some
+  compromises, most notably, that when a line number is not present, it is
+  inherited from the nearest parent.
+  """
+
   defguard is_literal(x)
            when is_integer(x) or
                   is_float(x) or
                   is_binary(x) or
                   is_atom(x)
-
-  @doc """
-  Converts the given string into a quoted expression following the same method
-  as `Code.Formatter.to_algebra/2`.
-  """
-  def string_to_quoted(string, opts \\ []) do
-    file = Keyword.get(opts, :file, "nofile")
-    line = Keyword.get(opts, :line, 1)
-    charlist = String.to_charlist(string)
-
-    tokenizer_options = [
-      unescape: false,
-      warn_on_unnecessary_quotes: false
-    ]
-
-    parser_options = [
-      literal_encoder: &{:ok, {:__block__, &2, [&1]}},
-      token_metadata: true
-    ]
-
-    with {:ok, tokens} <- :elixir.string_to_tokens(charlist, line, 1, file, tokenizer_options),
-         {:ok, forms} <- :elixir.tokens_to_quoted(tokens, file, parser_options) do
-      forms
-    end
-  end
 
   def quoted_to_string(quoted, _comments \\ []) do
     {:ok, doc} = Formatter.quoted_to_algebra(quoted)
@@ -273,4 +273,29 @@ defmodule Normalizer do
 
   defp keyword?([{_, _} | list]), do: keyword?(list)
   defp keyword?(rest), do: rest == []
+
+  @doc """
+  Converts the given string into a quoted expression following the same method
+  as `Code.Formatter.to_algebra/2`.
+  """
+  def string_to_quoted(string, opts \\ []) do
+    file = Keyword.get(opts, :file, "nofile")
+    line = Keyword.get(opts, :line, 1)
+    charlist = String.to_charlist(string)
+
+    tokenizer_options = [
+      unescape: false,
+      warn_on_unnecessary_quotes: false
+    ]
+
+    parser_options = [
+      literal_encoder: &{:ok, {:__block__, &2, [&1]}},
+      token_metadata: true
+    ]
+
+    with {:ok, tokens} <- :elixir.string_to_tokens(charlist, line, 1, file, tokenizer_options),
+         {:ok, forms} <- :elixir.tokens_to_quoted(tokens, file, parser_options) do
+      forms
+    end
+  end
 end

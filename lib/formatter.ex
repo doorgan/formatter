@@ -229,7 +229,8 @@ defmodule Formatter do
   end
 
   def quoted_to_algebra(forms, opts \\ []) do
-    state = state([], opts)
+    comments = Keyword.get(opts, :comments, [])
+    state = state(comments, opts)
 
     {doc, _} = block_to_algebra(forms, @min_line, @max_line, state)
     {:ok, doc}
