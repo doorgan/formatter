@@ -21,6 +21,10 @@ defmodule Mix.Tasks.Deps.Add do
         |> Jason.decode!()
         |> Map.get("latest_stable_version")
 
+      %{major: major, minor: minor} = Version.parse!(version)
+
+      version = "#{major}.#{minor}"
+
       add_dep(name, version)
     end
   end
@@ -32,9 +36,6 @@ defmodule Mix.Tasks.Deps.Add do
     quoted = Comments.merge_comments(quoted, comments)
 
     name = String.to_atom(name)
-    %{major: major, minor: minor} = Version.parse!(version)
-
-    version = "#{major}.#{minor}"
 
     quoted = Macro.postwalk(quoted, fn
       {:defp, meta, [{:deps, _, _} = fun, body]} ->
