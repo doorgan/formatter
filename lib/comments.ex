@@ -21,7 +21,7 @@ defmodule Comments do
       warn_on_unnecessary_quotes: false
     ]
 
-    {:ok, tokens} = :elixir.string_to_tokens(charlist, 1, 1, "nofile", tokenizer_options)
+    {:ok, _tokens} = :elixir.string_to_tokens(charlist, 1, 1, "nofile", tokenizer_options)
 
     Process.get(:code_formatter_comments)
   after
@@ -89,7 +89,7 @@ defmodule Comments do
     end
   end
 
-  defp do_merge_comments({_, meta, _} = ast, comments) do
+  defp do_merge_comments({_, _meta, _} = ast, comments) do
     {comments, rest} = gather_comments_for_line(comments, line(ast))
 
     ast = put_comments(ast, :leading_comments, comments)
