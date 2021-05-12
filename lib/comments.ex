@@ -85,7 +85,6 @@ defmodule Comments do
     if Enum.empty?(leftovers) do
       ast
     else
-      leftovers = Enum.map(leftovers, &elem(&1, 1))
       {:__block__, [trailing_comments: leftovers], [ast]}
     end
   end
@@ -152,8 +151,10 @@ defmodule Comments do
 
         trailing_comments =
           Keyword.get(meta, :trailing_comments, [])
-          |> Enum.map(fn {_, eols, text} ->
-            end_line = meta[:end][:line]
+          |> Enum.map(fn {comment_line, eols, text} ->
+            # Preserve original commet line if parent node does not have
+            # ending line information
+            end_line = meta[:end][:line] || meta[:closing][:line] || comment_line
             {end_line, eols, text}
           end)
 

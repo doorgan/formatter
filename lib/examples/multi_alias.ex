@@ -1,5 +1,4 @@
 defmodule Examples.MultiAlias do
-
   @doc """
   Walks the source code and expands instances of multi alias syntax like
   ```elixir
@@ -36,18 +35,19 @@ defmodule Examples.MultiAlias do
 
     quoted = Comments.merge_comments(quoted, comments)
 
-    quoted = Macro.postwalk(quoted, fn
-      {:alias, meta, [{{:., _, [_, :{}]}, _, _}]} = quoted ->
-        args = expand_multi_alias(quoted, [])
-        {:__block__, [line: meta[:line]], args}
+    quoted =
+      Macro.prewalk(quoted, fn
+        {:alias, meta, [{{:., _, [_, :{}]}, _, _}]} = quoted ->
+          args = expand_multi_alias(quoted, [])
+          {:__block__, [line: meta[:line]], args}
 
-      {:__block__, meta, args} ->
-        args = Enum.reduce(args, [], &expand_multi_alias/2)
-        {:__block__, meta, args}
+        {:__block__, meta, args} ->
+          args = Enum.reduce(args, [], &expand_multi_alias/2)
+          {:__block__, meta, args}
 
-      quoted ->
-        quoted
-    end)
+        quoted ->
+          quoted
+      end)
 
     {quoted, comments} = Comments.extract_comments(quoted)
 
@@ -59,12 +59,12 @@ defmodule Examples.MultiAlias do
   end
 
   defp expand_multi_alias(
-        {:alias, alias_meta,
-         [
-           {{:., _, [left, :{}]}, _, right}
-         ]},
-        args
-      ) do
+         {:alias, alias_meta,
+          [
+            {{:., _, [left, :{}]}, _, right}
+          ]},
+         args
+       ) do
     {_, _, base} = left
 
     aliases =

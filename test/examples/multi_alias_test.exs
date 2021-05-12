@@ -6,11 +6,12 @@ defmodule Example.MultiAliasTest do
     alias Foo.{Bar, Baz.Qux}
     """
 
-    expected = """
-    alias Foo.Bar
-    alias Foo.Baz.Qux
-    """
-    |> String.trim()
+    expected =
+      """
+      alias Foo.Bar
+      alias Foo.Baz.Qux
+      """
+      |> String.trim()
 
     actual = Examples.MultiAlias.fix(source)
 
@@ -25,18 +26,23 @@ defmodule Example.MultiAliasTest do
       # Here come the Baz
       Baz.Qux # With a Qux!
     }
+
+    # End of the demo :)
     """
 
-    expected = """
-    # Multi alias example
-    # Opening the multi alias
-    # Here is Bar
-    alias Foo.Bar
-    # Here come the Baz
-    # With a Qux!
-    alias Foo.Baz.Qux
-    """
-    |> String.trim()
+    expected =
+      """
+      # Multi alias example
+      # Opening the multi alias
+      # Here is Bar
+      alias Foo.Bar
+      # Here come the Baz
+      # With a Qux!
+      alias Foo.Baz.Qux
+
+      # End of the demo :)
+      """
+      |> String.trim()
 
     actual = Examples.MultiAlias.fix(source)
 
