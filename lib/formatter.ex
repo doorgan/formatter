@@ -190,6 +190,36 @@ defmodule Formatter do
     {left, right}
   end
 
+  def string_to_quoted_with_comments(string, opts \\ []) when is_binary(string) and is_list(opts) do
+    file = Keyword.get(opts, :file, "nofile")
+    line = Keyword.get(opts, :line, 1)
+    charlist = String.to_charlist(string)
+
+    Process.put(:code_formatter_comments, [])
+
+    tokenizer_options = [
+      unescape: false,
+      preserve_comments: &preserve_comments/5,
+      warn_on_unnecessary_quotes: false
+    ]
+
+    parser_options = [
+      literal_encoder: &{:ok, {:__block__, &2, [&1]}},
+      token_metadata: true
+    ]
+
+    with {:ok, tokens} <- :elixir.string_to_tokens(charlist, line, 1, file, tokenizer_options),
+         {:ok, forms} <- :elixir.tokens_to_quoted(tokens, file, parser_options) do
+      comments = Process.get(:code_formatter_comments)
+        |> Enum.reverse()
+        |> gather_comments()
+
+      {forms, comments}
+    end
+  after
+    Process.delete(:code_formatter_comments)
+  end
+
   @doc """
   Converts `string` to an algebra document.
   Returns `{:ok, doc}` or `{:error, parser_error}`.
