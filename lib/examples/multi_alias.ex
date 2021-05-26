@@ -30,40 +30,28 @@ defmodule Examples.MultiAlias do
   ```
   """
   def fix(source) do
-    {quoted, comments} = Formatter.string_to_quoted_with_comments(source)
+    source
+    |> AST.from_string()
+    |> AST.postwalk(fn
+      {:alias, _, [{{:., _, [_, :{}]}, _, _}]} = quoted, state ->
+        {aliases, line_correction} = expand_alias(quoted, state.line_correction)
+        state = %{state | line_correction: line_correction}
+        {{:__block__, [flatten_me?: true], aliases}, state}
 
-    quoted = Comments.merge_comments(quoted, comments)
+      {:__block__, meta, args}, state ->
+        args = flatten_aliases_blocks(args)
 
-    quoted =
-      Macro.prewalk(quoted, fn
-        {:alias, meta, [{{:., _, [_, :{}]}, _, _}]} = quoted ->
-          args = expand_multi_alias(quoted, [])
-          {:__block__, [line: meta[:line]], args}
+        {{:__block__, meta, args}, state}
 
-        {:__block__, meta, args} ->
-          args = Enum.reduce(args, [], &expand_multi_alias/2)
-          {:__block__, meta, args}
-
-        quoted ->
-          quoted
-      end)
-
-    {quoted, comments} = Comments.extract_comments(quoted)
-
-    quoted = Normalizer.normalize(quoted)
-
-    {:ok, doc} = Formatter.quoted_to_algebra(quoted, comments: comments)
-
-    doc |> Inspect.Algebra.format(98) |> IO.iodata_to_binary()
+      quoted, state ->
+        {quoted, state}
+    end)
+    |> AST.format_ast()
   end
 
-  defp expand_multi_alias(
-         {:alias, alias_meta,
-          [
-            {{:., _, [left, :{}]}, _, right}
-          ]},
-         args
-       ) do
+  defp expand_alias({:alias, alias_meta, [{{:., _, [left, :{}]}, _, right}]}, line_correction) do
+    alias_meta = AST.correct_lines(alias_meta, line_correction)
+
     {_, _, base} = left
 
     aliases =
@@ -84,8 +72,20 @@ defmodule Examples.MultiAlias do
         {:alias, meta, [{:__aliases__, [line: line], base ++ segments}]}
       end)
 
-    args ++ aliases
+    newlines = get_in(alias_meta, [:end_of_expression, :newlines]) || 1
+
+    line_correction = line_correction + length(aliases) + newlines
+
+    {aliases, line_correction}
   end
 
-  defp expand_multi_alias(quoted, args), do: args ++ [quoted]
+  defp flatten_aliases_blocks(args) do
+    Enum.reduce(args, [], fn
+      {:__block__, [flatten_me?: true], aliases}, args ->
+        args ++ aliases
+
+      quoted, args ->
+        args ++ [quoted]
+    end)
+  end
 end

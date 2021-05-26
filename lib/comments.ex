@@ -1,5 +1,4 @@
 defmodule Comments do
-
   @doc """
   Merges the comments into the given quoted expression.
 
@@ -45,8 +44,8 @@ defmodule Comments do
   defp gather_comments_for_line(comments, line) do
     {comments, rest} =
       Enum.reduce(comments, {[], []}, fn
-        {comment_line, _, _} = comment, {comments, rest} ->
-          if comment_line <= line do
+        comment, {comments, rest} ->
+          if comment.line <= line do
             {[comment | comments], rest}
           else
             {comments, [comment | rest]}
@@ -77,24 +76,26 @@ defmodule Comments do
 
         leading_comments =
           Keyword.get(meta, :leading_comments, [])
-          |> Enum.map(fn {_, eols, text} ->
-            {line, eols, text}
+          |> Enum.map(fn comment ->
+            %{comment | line: line}
           end)
           |> Enum.reverse()
 
-        acc = if Enum.empty?(leading_comments), do: acc, else: acc ++ leading_comments
+        acc = acc ++ leading_comments
 
         trailing_comments =
           Keyword.get(meta, :trailing_comments, [])
-          |> Enum.map(fn {comment_line, eols, text} ->
+          |> Enum.map(fn comment ->
             # Preserve original commet line if parent node does not have
             # ending line information
-            end_line = meta[:end][:line] || meta[:closing][:line] || comment_line
-            {end_line, eols, text}
+            end_line = meta[:end][:line] || meta[:closing][:line] || comment.line
+            %{comment | line: end_line}
           end)
           |> Enum.reverse()
 
-        acc = if Enum.empty?(trailing_comments), do: acc, else: acc ++ trailing_comments
+        acc = acc ++ trailing_comments
+
+        acc = Enum.sort_by(acc, & &1.line)
 
         quoted =
           Macro.update_meta(quoted, fn meta ->

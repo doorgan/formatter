@@ -7,6 +7,7 @@ defmodule Mix.Tasks.Deps.Add do
   def run([name, version | _] = _args) do
     add_dep(name, version)
   end
+
   def run([name | _] = _args) do
     :inets.start()
     :ssl.start()
@@ -15,6 +16,7 @@ defmodule Mix.Tasks.Deps.Add do
 
     with {:ok, response} <- :httpc.request(:get, {url, [{'User-Agent', @user_agent}]}, [], []) do
       {_, _, body} = response
+
       version =
         body
         |> List.to_string()
@@ -31,38 +33,45 @@ defmodule Mix.Tasks.Deps.Add do
 
   defp add_dep(name, version) do
     source = File.read!("mix.exs")
-    {quoted, comments} = Formatter.string_to_quoted_with_comments(source)
 
-    quoted = Comments.merge_comments(quoted, comments)
+    new_source =
+      source
+      |> AST.from_string()
+      |> AST.postwalk(fn
+        {:defp, meta, [{:deps, _, _} = fun, body]}, state ->
+          [{{_, _, [:do]}, block_ast}] = body
+          {:__block__, block_meta, [deps]} = block_ast
 
-    name = String.to_atom(name)
+          dep_line =
+            case List.last(deps) do
+              {_, meta, _} ->
+                meta[:line] || block_meta[:line]
 
-    quoted = Macro.postwalk(quoted, fn
-      {:defp, meta, [{:deps, _, _} = fun, body]} ->
-        [{{_, _, [:do]} = do_ast, block_ast}] = body
-        {:__block__, meta1, [deps]} = block_ast
+              _ ->
+                block_meta[:line]
+            end + 1
 
-        deps =
-          deps ++
-            [
-              {:__block__, [],
-               [{{:__block__, [], [name]}, {:__block__, [delimiter: "\""], ["~> " <> version]}}]}
-            ]
+          deps =
+            deps ++
+              [
+                {:__block__, [line: dep_line],
+                [
+                  {
+                    String.to_atom(name),
+                    {:__block__, [line: dep_line, delimiter: "\""], ["~> " <> version]}
+                  }
+                ]}
+              ]
 
-        {:defp, meta, [fun, [do: {:__block__, meta1, [deps]}]]}
+          ast = {:defp, meta, [fun, [do: {:__block__, block_meta, [deps]}]]}
+          state = Map.update!(state, :line_correction, & &1)
+          {ast, state}
 
-      other ->
-        other
-    end)
+        other, state ->
+          {other, state}
+      end)
+      |> AST.format_ast()
 
-    {quoted, comments} = Comments.extract_comments(quoted)
-
-    quoted = Normalizer.normalize(quoted)
-
-    {:ok, doc} = Formatter.quoted_to_algebra(quoted, comments: comments)
-
-    new_source = doc |> Inspect.Algebra.format(98) |> IO.iodata_to_binary()
-
-    IO.puts(new_source)
+    File.write!("mix.exs", new_source)
   end
 end

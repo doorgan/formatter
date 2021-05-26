@@ -48,4 +48,33 @@ defmodule Example.MultiAliasTest do
 
     assert actual == expected
   end
+
+  test "does not misplace comments above or below" do
+    source = """
+    # A
+    :a
+
+    alias Foo.{Bar, Baz,
+    Qux}
+
+    :b # B
+    """
+
+    expected =
+      """
+      # A
+      :a
+
+      alias Foo.Bar
+      alias Foo.Baz
+      alias Foo.Qux
+      # B
+      :b
+      """
+      |> String.trim()
+
+    actual = Examples.MultiAlias.fix(source)
+
+    assert actual == expected
+  end
 end
