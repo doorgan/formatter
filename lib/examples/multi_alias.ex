@@ -31,8 +31,8 @@ defmodule Examples.MultiAlias do
   """
   def fix(source) do
     source
-    |> AST.from_string()
-    |> AST.postwalk(fn
+    |> Sourceror.parse_string()
+    |> Sourceror.postwalk(fn
       {:alias, _, [{{:., _, [_, :{}]}, _, _}]} = quoted, state ->
         {aliases, line_correction} = expand_alias(quoted, state.line_correction)
         state = %{state | line_correction: line_correction}
@@ -46,11 +46,11 @@ defmodule Examples.MultiAlias do
       quoted, state ->
         {quoted, state}
     end)
-    |> AST.format_ast()
+    |> Sourceror.to_string()
   end
 
   defp expand_alias({:alias, alias_meta, [{{:., _, [left, :{}]}, _, right}]}, line_correction) do
-    alias_meta = AST.correct_lines(alias_meta, line_correction)
+    alias_meta = Sourceror.correct_lines(alias_meta, line_correction)
 
     {_, _, base} = left
 

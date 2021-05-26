@@ -22,6 +22,7 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 playground-*.tar
 
+/.elixir_ls/
 
 # Temporary files for e.g. tests
 /tmp

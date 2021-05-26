@@ -36,8 +36,8 @@ defmodule Mix.Tasks.Deps.Add do
 
     new_source =
       source
-      |> AST.from_string()
-      |> AST.postwalk(fn
+      |> Sourceror.parse_string()
+      |> Sourceror.postwalk(fn
         {:defp, meta, [{:deps, _, _} = fun, body]}, state ->
           [{{_, _, [:do]}, block_ast}] = body
           {:__block__, block_meta, [deps]} = block_ast
@@ -55,12 +55,12 @@ defmodule Mix.Tasks.Deps.Add do
             deps ++
               [
                 {:__block__, [line: dep_line],
-                [
-                  {
-                    String.to_atom(name),
-                    {:__block__, [line: dep_line, delimiter: "\""], ["~> " <> version]}
-                  }
-                ]}
+                 [
+                   {
+                     String.to_atom(name),
+                     {:__block__, [line: dep_line, delimiter: "\""], ["~> " <> version]}
+                   }
+                 ]}
               ]
 
           ast = {:defp, meta, [fun, [do: {:__block__, block_meta, [deps]}]]}
@@ -70,7 +70,7 @@ defmodule Mix.Tasks.Deps.Add do
         other, state ->
           {other, state}
       end)
-      |> AST.format_ast()
+      |> Sourceror.to_string()
 
     File.write!("mix.exs", new_source)
   end
